@@ -158,6 +158,10 @@ for platform in "${PLATFORMS[@]}"; do
     cp package.json "$OUTPUT_DIR/$platform/"
     cp README.md "$OUTPUT_DIR/$platform/"
     cp CHANGELOG.md "$OUTPUT_DIR/$platform/"
+    cat > "$OUTPUT_DIR/$platform/index.js" <<'EOF'
+const AgentSession = globalThis[Symbol.for("@earendil-works/pi-coding-agent:bun-agent-session")];
+export { AgentSession };
+EOF
     cp ../../node_modules/@silvia-odwyer/photon-node/photon_rs_bg.wasm "$OUTPUT_DIR/$platform/"
     mkdir -p "$OUTPUT_DIR/$platform/theme"
     cp dist/modes/interactive/theme/*.json "$OUTPUT_DIR/$platform/theme/"

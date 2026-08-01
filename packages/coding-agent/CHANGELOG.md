@@ -13,6 +13,7 @@
 
 ### Fixed
 
+- Fixed standalone Bun binaries loading extensions that resolve the active Pi runtime or depend on `@stll/regex-set`.
 - Fixed Kitty image previews in fullscreen mode overlapping the sticky editor and footer dock while scrolling.
 - Fixed spaces in `/settings` searches toggling the highlighted setting while typing multi-word queries such as **UI mode** or **Quiet startup**.
 - Fixed custom editors not inheriting the default editor's autocomplete dropdown item limit ([#7333](https://github.com/earendil-works/pi/issues/7333)).

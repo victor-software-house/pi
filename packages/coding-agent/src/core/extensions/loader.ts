@@ -21,11 +21,13 @@ import { createJiti } from "jiti/static";
 import * as _bundledTypebox from "typebox";
 import * as _bundledTypeboxCompile from "typebox/compile";
 import * as _bundledTypeboxValue from "typebox/value";
+import { BunRegexSetCompat } from "../../bun/regex-set-compat.ts";
 import { CONFIG_DIR_NAME, getAgentDir, isBunBinary } from "../../config.ts";
 // NOTE: This import works because loader.ts exports are NOT re-exported from index.ts,
 // avoiding a circular dependency. Extensions can import from @earendil-works/pi-coding-agent.
 import * as _bundledPiCodingAgent from "../../index.ts";
 import { resolvePath } from "../../utils/paths.ts";
+import { AgentSession as BundledAgentSession } from "../agent-session.ts";
 import { createEventBus, type EventBus } from "../event-bus.ts";
 import type { ExecOptions } from "../exec.ts";
 import { execCommand } from "../exec.ts";
@@ -72,6 +74,12 @@ const VIRTUAL_MODULES: Record<string, unknown> = {
 	"@mariozechner/pi-ai/providers/all": _bundledPiAiProviders,
 	"@mariozechner/pi-coding-agent": _bundledPiCodingAgent,
 };
+
+if (isBunBinary) {
+	VIRTUAL_MODULES["@stll/regex-set"] = { RegexSet: BunRegexSetCompat };
+	(globalThis as Record<symbol, unknown>)[Symbol.for("@earendil-works/pi-coding-agent:bun-agent-session")] =
+		BundledAgentSession;
+}
 
 const require = createRequire(import.meta.url);
 
