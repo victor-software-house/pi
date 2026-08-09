@@ -18,6 +18,9 @@ import { InteractiveMode } from "../../../src/modes/interactive/interactive-mode
 
 type ShutdownThis = {
 	isShuttingDown: boolean;
+	finishShutdown: (exit: { code: number; reason: "quit" | "signal" }) => void;
+	resolveShutdown: () => void;
+	options: { onExit?: (exit: { code: number; reason: "quit" | "signal" }) => void };
 	unregisterSignalHandlers: () => void;
 	runtimeHost: { dispose: () => Promise<void> };
 	ui: { terminal: { drainInput: (ms: number) => Promise<void> } };
@@ -28,9 +31,10 @@ type ShutdownThis = {
 
 type InteractiveModePrototypeWithShutdown = {
 	shutdown(this: ShutdownThis, options?: { fromSignal?: boolean }): Promise<void>;
+	finishShutdown(this: ShutdownThis, exit: { code: number; reason: "quit" | "signal" }): void;
 };
 
-const interactiveModePrototype = InteractiveMode.prototype as unknown;
+const interactiveModePrototype = InteractiveMode.prototype as unknown as InteractiveModePrototypeWithShutdown;
 const tempDirs: string[] = [];
 const originalStdoutIsTTY = Object.getOwnPropertyDescriptor(process.stdout, "isTTY");
 
@@ -69,6 +73,9 @@ function restoreStdoutIsTTY(): void {
 function createContext(order: string[], sessionManager = createSessionManager()): ShutdownThis {
 	return {
 		isShuttingDown: false,
+		finishShutdown: interactiveModePrototype.finishShutdown,
+		resolveShutdown: vi.fn(),
+		options: {},
 		unregisterSignalHandlers: vi.fn(),
 		runtimeHost: {
 			dispose: vi.fn(async () => {

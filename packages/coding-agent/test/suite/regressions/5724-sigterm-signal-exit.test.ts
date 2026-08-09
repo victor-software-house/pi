@@ -11,7 +11,7 @@ import { InteractiveMode } from "../../../src/modes/interactive/interactive-mode
 type ShutdownThis = {
 	isShuttingDown: boolean;
 	finishShutdown: (exit: { code: number; reason: "quit" | "signal" }) => void;
-	onInputCallback?: (text: string | undefined) => void;
+	resolveShutdown: () => void;
 	options: { onExit?: (exit: { code: number; reason: "quit" | "signal" }) => void };
 	unregisterSignalHandlers: () => void;
 	runtimeHost: { dispose: () => Promise<void> };
@@ -63,6 +63,7 @@ describe("InteractiveMode SIGTERM shutdown with signal-exit (#5724)", () => {
 		const context: ShutdownThis = {
 			isShuttingDown: false,
 			finishShutdown: interactiveModePrototype.finishShutdown,
+			resolveShutdown: vi.fn(),
 			options: {},
 			unregisterSignalHandlers: vi.fn(() => {
 				order.push("unregister");
@@ -107,7 +108,7 @@ describe("InteractiveMode SIGTERM shutdown with signal-exit (#5724)", () => {
 		const context: ShutdownThis = {
 			isShuttingDown: false,
 			finishShutdown: interactiveModePrototype.finishShutdown,
-			onInputCallback: releaseInput,
+			resolveShutdown: releaseInput,
 			options: { onExit: exit },
 			unregisterSignalHandlers: vi.fn(),
 			runtimeHost: { dispose: vi.fn(async () => {}) },
@@ -118,7 +119,7 @@ describe("InteractiveMode SIGTERM shutdown with signal-exit (#5724)", () => {
 
 		await callShutdown(context, { fromSignal: true });
 
-		expect(releaseInput).toHaveBeenCalledWith(undefined);
+		expect(releaseInput).toHaveBeenCalledOnce();
 		expect(exit).toHaveBeenCalledWith({ code: 0, reason: "signal" });
 		expect(processExit).not.toHaveBeenCalled();
 	});

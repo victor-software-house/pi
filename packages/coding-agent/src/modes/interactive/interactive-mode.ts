@@ -417,7 +417,11 @@ export class InteractiveMode {
 	private keybindings: KeybindingsManager;
 	private version: string;
 	private isInitialized = false;
-	private onInputCallback?: (text: string | undefined) => void;
+	private onInputCallback?: (text: string) => void;
+	private resolveShutdown!: () => void;
+	private readonly shutdownPromise = new Promise<undefined>((resolve) => {
+		this.resolveShutdown = () => resolve(undefined);
+	});
 	private pendingUserInputs: string[] = [];
 	private activeStatusIndicator: StatusIndicator | undefined = undefined;
 	private readonly idleStatus = new IdleStatus();
@@ -846,7 +850,8 @@ export class InteractiveMode {
 	async init(): Promise<void> {
 		if (this.isInitialized) return;
 
-		this.registerSignalHandlers();
+		// Embedded hosts own process lifetime and signals together.
+		if (!this.options.onExit) this.registerSignalHandlers();
 
 		// Load changelog (only show new entries, skip for resumed sessions)
 		this.changelogMarkdown = this.getChangelogForDisplay();
@@ -1096,7 +1101,7 @@ export class InteractiveMode {
 
 		// Main interactive loop
 		while (!this.isShuttingDown) {
-			const userInput = await this.getUserInput();
+			const userInput = await Promise.race([this.getUserInput(), this.shutdownPromise]);
 			if (userInput === undefined) return;
 			try {
 				await this.session.prompt(userInput);
@@ -3735,15 +3740,14 @@ export class InteractiveMode {
 		);
 	}
 
-	async getUserInput(): Promise<string | undefined> {
-		if (this.isShuttingDown) return undefined;
+	async getUserInput(): Promise<string> {
 		const queuedInput = this.pendingUserInputs.shift();
 		if (queuedInput !== undefined) {
 			return queuedInput;
 		}
 
 		return new Promise((resolve) => {
-			this.onInputCallback = (text: string | undefined) => {
+			this.onInputCallback = (text: string) => {
 				this.onInputCallback = undefined;
 				resolve(text);
 			};
@@ -3824,9 +3828,8 @@ export class InteractiveMode {
 	}
 
 	private finishShutdown(exit: InteractiveModeExit): void {
-		const pendingInput = this.onInputCallback;
 		this.onInputCallback = undefined;
-		pendingInput?.(undefined);
+		this.resolveShutdown();
 		if (this.options.onExit) {
 			this.options.onExit(exit);
 			return;
