@@ -334,6 +334,7 @@ export { type MainOptions, main } from "./main.ts";
 // Run modes for programmatic SDK usage
 export {
 	InteractiveMode,
+	type InteractiveModeExit,
 	type InteractiveModeOptions,
 	type JsonAgentSessionEvent,
 	type ModelInfo,

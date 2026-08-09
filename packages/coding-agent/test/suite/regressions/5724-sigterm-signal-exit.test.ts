@@ -10,6 +10,9 @@ import { InteractiveMode } from "../../../src/modes/interactive/interactive-mode
 
 type ShutdownThis = {
 	isShuttingDown: boolean;
+	finishShutdown: (exit: { code: number; reason: "quit" | "signal" }) => void;
+	onInputCallback?: (text: string | undefined) => void;
+	options: { onExit?: (exit: { code: number; reason: "quit" | "signal" }) => void };
 	unregisterSignalHandlers: () => void;
 	runtimeHost: { dispose: () => Promise<void> };
 	ui: { terminal: { drainInput: (ms: number) => Promise<void> } };
@@ -19,9 +22,10 @@ type ShutdownThis = {
 
 type InteractiveModePrototypeWithShutdown = {
 	shutdown(this: ShutdownThis, options?: { fromSignal?: boolean }): Promise<void>;
+	finishShutdown(this: ShutdownThis, exit: { code: number; reason: "quit" | "signal" }): void;
 };
 
-const interactiveModePrototype = InteractiveMode.prototype as unknown;
+const interactiveModePrototype = InteractiveMode.prototype as unknown as InteractiveModePrototypeWithShutdown;
 
 class ProcessExitError extends Error {}
 
@@ -58,6 +62,8 @@ describe("InteractiveMode SIGTERM shutdown with signal-exit (#5724)", () => {
 		const dispose = deferred();
 		const context: ShutdownThis = {
 			isShuttingDown: false,
+			finishShutdown: interactiveModePrototype.finishShutdown,
+			options: {},
 			unregisterSignalHandlers: vi.fn(() => {
 				order.push("unregister");
 			}),
@@ -90,5 +96,30 @@ describe("InteractiveMode SIGTERM shutdown with signal-exit (#5724)", () => {
 		await shutdownPromise;
 
 		expect(order).toEqual(["dispose", "drainInput", "stop"]);
+	});
+
+	test("lets an embedded host observe clean signal shutdown without process exit", async () => {
+		const exit = vi.fn();
+		const releaseInput = vi.fn();
+		const processExit = vi.spyOn(process, "exit").mockImplementation((() => {
+			throw new ProcessExitError();
+		}) as typeof process.exit);
+		const context: ShutdownThis = {
+			isShuttingDown: false,
+			finishShutdown: interactiveModePrototype.finishShutdown,
+			onInputCallback: releaseInput,
+			options: { onExit: exit },
+			unregisterSignalHandlers: vi.fn(),
+			runtimeHost: { dispose: vi.fn(async () => {}) },
+			ui: { terminal: { drainInput: vi.fn(async () => {}) } },
+			themeController: { disableAutoSync: vi.fn() },
+			stop: vi.fn(),
+		};
+
+		await callShutdown(context, { fromSignal: true });
+
+		expect(releaseInput).toHaveBeenCalledWith(undefined);
+		expect(exit).toHaveBeenCalledWith({ code: 0, reason: "signal" });
+		expect(processExit).not.toHaveBeenCalled();
 	});
 });

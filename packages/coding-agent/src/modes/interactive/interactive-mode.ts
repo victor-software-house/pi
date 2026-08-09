@@ -309,6 +309,11 @@ function formatLoginProviderCompletionDescription(provider: LoginProviderComplet
 	return provider.name === provider.id ? authTypes : `${provider.name} · ${authTypes}`;
 }
 
+export interface InteractiveModeExit {
+	code: number;
+	reason: "quit" | "signal";
+}
+
 /**
  * Options for InteractiveMode initialization.
  */
@@ -329,6 +334,8 @@ export interface InteractiveModeOptions {
 	verbose?: boolean;
 	/** TUI layout mode. */
 	tuiMode?: TuiMode;
+	/** Receive clean shutdown after runtime and terminal disposal instead of terminating the host process. */
+	onExit?: (exit: InteractiveModeExit) => void;
 }
 
 interface InteractiveTuiOptions {
@@ -410,7 +417,7 @@ export class InteractiveMode {
 	private keybindings: KeybindingsManager;
 	private version: string;
 	private isInitialized = false;
-	private onInputCallback?: (text: string) => void;
+	private onInputCallback?: (text: string | undefined) => void;
 	private pendingUserInputs: string[] = [];
 	private activeStatusIndicator: StatusIndicator | undefined = undefined;
 	private readonly idleStatus = new IdleStatus();
@@ -1088,8 +1095,9 @@ export class InteractiveMode {
 		}
 
 		// Main interactive loop
-		while (true) {
+		while (!this.isShuttingDown) {
 			const userInput = await this.getUserInput();
+			if (userInput === undefined) return;
 			try {
 				await this.session.prompt(userInput);
 			} catch (error: unknown) {
@@ -3727,14 +3735,15 @@ export class InteractiveMode {
 		);
 	}
 
-	async getUserInput(): Promise<string> {
+	async getUserInput(): Promise<string | undefined> {
+		if (this.isShuttingDown) return undefined;
 		const queuedInput = this.pendingUserInputs.shift();
 		if (queuedInput !== undefined) {
 			return queuedInput;
 		}
 
 		return new Promise((resolve) => {
-			this.onInputCallback = (text: string) => {
+			this.onInputCallback = (text: string | undefined) => {
 				this.onInputCallback = undefined;
 				resolve(text);
 			};
@@ -3791,7 +3800,8 @@ export class InteractiveMode {
 			this.themeController.disableAutoSync();
 			await this.ui.terminal.drainInput(1000);
 			this.stop();
-			process.exit(0);
+			this.finishShutdown({ code: 0, reason: "signal" });
+			return;
 		}
 
 		// Interactive quit (Ctrl+D, Ctrl+C, /quit, extension shutdown()). Stop the
@@ -3810,7 +3820,18 @@ export class InteractiveMode {
 			process.stdout.write(`${chalk.dim("To resume this session:")} ${resumeCommand}\n`);
 		}
 
-		process.exit(0);
+		this.finishShutdown({ code: 0, reason: "quit" });
+	}
+
+	private finishShutdown(exit: InteractiveModeExit): void {
+		const pendingInput = this.onInputCallback;
+		this.onInputCallback = undefined;
+		pendingInput?.(undefined);
+		if (this.options.onExit) {
+			this.options.onExit(exit);
+			return;
+		}
+		process.exit(exit.code);
 	}
 
 	private emergencyTerminalExit(): never {

@@ -1057,6 +1057,22 @@ const mode = new InteractiveMode(runtime, {
 await mode.run();
 ```
 
+By default, clean interactive shutdown terminates the process after disposing the runtime and terminal. Embedded applications can keep ownership of process lifetime by providing `onExit`; `run()` then returns after cleanup:
+
+```typescript
+let exitCode = 0;
+const mode = new InteractiveMode(runtime, {
+  onExit(exit) {
+    exitCode = exit.code;
+  },
+});
+
+await mode.run();
+console.log(`Interactive mode exited with ${exitCode}.`);
+```
+
+Fatal terminal failures still terminate the process because terminal restoration is unsafe in that state.
+
 ### runPrintMode
 
 Single-shot mode: send prompts, output result, exit:
