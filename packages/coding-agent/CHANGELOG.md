@@ -4,7 +4,6 @@
 
 ### Added
 
-- Added an `InteractiveMode` exit callback for embedding the interactive application without terminating its host process after clean shutdown.
 - Added a fullscreen exit output setting to choose between printing the final transcript and only a session resume hint.
 
 ### Changed
